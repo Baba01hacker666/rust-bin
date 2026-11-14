@@ -69,4 +69,4 @@ jobs:
           pattern: wheels-*
           path: dist
           merge-multiple: true
-      - run: uv publish --skip-existing dist/*
+      - run: uv publish --check-url https://pypi.org/simple/ dist/*
