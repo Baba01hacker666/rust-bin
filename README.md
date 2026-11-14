@@ -43,3 +43,22 @@ RUST_PART=lld RUST_TARGET=x86_64-unknown-linux-gnu \
 
 The `llvm` part is skipped for targets where LLVM is statically linked (i686,
 musl and Windows).
+
+## Publishing
+
+Pushing a `v*.*.*` tag builds every wheel and publishes it with trusted
+publishing. PyPI identifies a trusted publisher by repository, workflow and
+environment and ignores the project name, so each of the four projects is
+published by its own job with its own environment:
+
+| Project           | Environment  |
+| ----------------- | ------------ |
+| `rustc-bin`       | (none)       |
+| `rustc-bin-llvm`  | `pypi-llvm`  |
+| `rustc-bin-driver`| `pypi-driver`|
+| `rustc-bin-lld`   | `pypi-lld`   |
+
+Projects that do not exist yet need a matching pending publisher on
+https://pypi.org/manage/account/publishing/ before the first release.
+Re-running a release is safe: uploads use `--check-url`, which skips files that
+are already on the index.

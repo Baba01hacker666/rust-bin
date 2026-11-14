@@ -55,7 +55,11 @@ jobs:
           name: wheels-${{ matrix.part.name }}-${{ matrix.target.rust }}
           path: ${{ matrix.part.path }}/dist/*.whl
           if-no-files-found: error
-  publish:
+  # PyPI keys a pending publisher on (owner, repository, workflow, environment)
+  # and ignores the project name, so every project published from this repo
+  # needs its own job with its own GitHub environment. rustc-bin already has a
+  # publisher without an environment, so that job deliberately has none.
+  publish-main:
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -66,7 +70,55 @@ jobs:
           enable-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          pattern: wheels-*
+          pattern: wheels-main-*
           path: dist
           merge-multiple: true
-      - run: uv publish --check-url https://pypi.org/simple/ dist/*
+      - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl
+  publish-llvm:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi-llvm
+    permissions:
+      id-token: write
+    steps:
+      - uses: astral-sh/setup-uv@ed21f2f24f8dd64503750218de024bcf64c7250a
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: wheels-llvm-*
+          path: dist
+          merge-multiple: true
+      - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl
+  publish-driver:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi-driver
+    permissions:
+      id-token: write
+    steps:
+      - uses: astral-sh/setup-uv@ed21f2f24f8dd64503750218de024bcf64c7250a
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: wheels-driver-*
+          path: dist
+          merge-multiple: true
+      - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl
+  publish-lld:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi-lld
+    permissions:
+      id-token: write
+    steps:
+      - uses: astral-sh/setup-uv@ed21f2f24f8dd64503750218de024bcf64c7250a
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: wheels-lld-*
+          path: dist
+          merge-multiple: true
+      - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl
