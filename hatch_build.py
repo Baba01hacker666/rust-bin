@@ -80,9 +80,13 @@ class RustBinaryBuildHook(BuildHookInterface):
         build_data["tag"] = "py3-none-" + wheel_tag
 
         tag = os.environ["GITHUB_REF_NAME"]
-        match = re.search(r"v?(\d+\.\d+\.\d+)", tag)
+        match = re.search(r"v?(\d+\.\d+\.\d+)(?:\.post\d+)?", tag)
         assert match is not None, "GITHUB_REF_NAME must contain a version"
-        version = match.group(1)
+        rust_version = match.group(1)
+        # The packaging version may carry a .postN suffix (for republishing
+        # without changing the upstream Rust release), but the tarballs and
+        # their inner paths are always named after the upstream version.
+        version = re.sub(r"^v", "", tag)
 
         is_windows = "windows" in rust_target
         rust_dir = os.path.join(self.root, "rust")
@@ -92,7 +96,7 @@ class RustBinaryBuildHook(BuildHookInterface):
                 strip = None
                 strip_env: dict[str, str] = {}
                 if part in ("llvm", "driver") and "linux" in rust_target:
-                    strip, strip_env = _llvm_strip(version, temp_dir, self.root)
+                    strip, strip_env = _llvm_strip(rust_version, temp_dir, self.root)
 
                 if part == "main":
                     components = (
@@ -104,7 +108,7 @@ class RustBinaryBuildHook(BuildHookInterface):
                     components = (("rustc", "rustc"),)
 
                 for component, inner in components:
-                    archive_name = f"{component}-{version}-{rust_target}.tar.gz"
+                    archive_name = f"{component}-{rust_version}-{rust_target}.tar.gz"
                     _download(
                         "https://static.rust-lang.org/dist/" + archive_name,
                         os.path.join(self.root, archive_name),
@@ -115,7 +119,7 @@ class RustBinaryBuildHook(BuildHookInterface):
                             tar.extractall(path=temp_dir)
                         elif part == "lld":
                             prefix = (
-                                f"rustc-{version}-{rust_target}/rustc/lib/rustlib/"
+                                f"rustc-{rust_version}-{rust_target}/rustc/lib/rustlib/"
                                 f"{rust_target}/bin/"
                             )
                             members = [
@@ -127,13 +131,13 @@ class RustBinaryBuildHook(BuildHookInterface):
                             tar.extractall(path=temp_dir, members=members)
                         else:
                             if part == "llvm":
-                                prefix = f"rustc-{version}-{rust_target}/rustc/lib/"
+                                prefix = f"rustc-{rust_version}-{rust_target}/rustc/lib/"
                                 wanted = "libLLVM"
                             elif is_windows:
-                                prefix = f"rustc-{version}-{rust_target}/rustc/bin/"
+                                prefix = f"rustc-{rust_version}-{rust_target}/rustc/bin/"
                                 wanted = "rustc_driver"
                             else:
-                                prefix = f"rustc-{version}-{rust_target}/rustc/lib/"
+                                prefix = f"rustc-{rust_version}-{rust_target}/rustc/lib/"
                                 wanted = "librustc_driver"
                             members = [
                                 member
@@ -144,7 +148,7 @@ class RustBinaryBuildHook(BuildHookInterface):
                             ]
                             tar.extractall(path=temp_dir, members=members)
 
-                    comp_top = os.path.join(temp_dir, f"{component}-{version}-{rust_target}")
+                    comp_top = os.path.join(temp_dir, f"{component}-{rust_version}-{rust_target}")
                     src_prefix = os.path.join(comp_top, inner)
 
                     if part == "main":
