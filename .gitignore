@@ -1,5 +1,5 @@
-rust/
-dist/
+/rust/
+/dist/
 *.tar.gz
 *.zip
 __pycache__/
