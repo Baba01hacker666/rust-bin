@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
+        target:
           - { rust: "x86_64-unknown-linux-gnu", wheel: "manylinux_2_17_x86_64" }
           - { rust: "aarch64-unknown-linux-gnu", wheel: "manylinux_2_17_aarch64" }
           - { rust: "i686-unknown-linux-gnu", wheel: "manylinux_2_17_i686" }
@@ -25,6 +25,10 @@ jobs:
           - { rust: "aarch64-pc-windows-msvc", wheel: "win_arm64" }
           - { rust: "x86_64-apple-darwin", wheel: "macosx_10_9_x86_64" }
           - { rust: "aarch64-apple-darwin", wheel: "macosx_11_0_arm64" }
+        part:
+          - { name: "main", path: "." }
+          - { name: "llvm", path: "packages/rustc-bin-llvm" }
+          - { name: "driver", path: "packages/rustc-bin-driver" }
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
         with:
@@ -33,17 +37,22 @@ jobs:
       - uses: astral-sh/setup-uv@ed21f2f24f8dd64503750218de024bcf64c7250a
         with:
           enable-cache: false
-      - env:
-          RUST_TARGET: ${{ matrix.rust }}
-          WHEEL_TAG: ${{ matrix.wheel }}
+      - if: ${{ !(matrix.part.name == 'llvm' && contains(matrix.target.rust, 'windows')) }}
+        env:
+          RUST_PART: ${{ matrix.part.name }}
+          RUST_TARGET: ${{ matrix.target.rust }}
+          WHEEL_TAG: ${{ matrix.target.wheel }}
         run: |
+          cd "${{ matrix.part.path }}"
+          RUST_PART="$RUST_PART" \
           RUST_TARGET="$RUST_TARGET" \
           WHEEL_TAG="$WHEEL_TAG" \
           uv build --wheel
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - if: ${{ !(matrix.part.name == 'llvm' && contains(matrix.target.rust, 'windows')) }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: wheels-${{ matrix.rust }}
-          path: dist/*.whl
+          name: wheels-${{ matrix.part.name }}-${{ matrix.target.rust }}
+          path: ${{ matrix.part.path }}/dist/*.whl
           if-no-files-found: error
   publish:
     needs: build

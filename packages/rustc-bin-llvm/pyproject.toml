@@ -1,0 +1,25 @@
+[project]
+name = "rustc-bin-llvm"
+description = "LLVM runtime libraries for rustc-bin"
+requires-python = ">=3.6"
+license = "MIT"
+authors = [{ name = "baba01hacker" }]
+keywords = ["binary", "rust", "rustc", "llvm", "packaging", "prebuilt"]
+classifiers = [
+  "Operating System :: OS Independent",
+  "Programming Language :: Rust",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/Baba01hacker666/rust-bin"
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "code"
+path = "src/rust/_version.py"
+
+[tool.hatch.build.hooks.custom]
