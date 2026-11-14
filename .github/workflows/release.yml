@@ -17,14 +17,14 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - { rust: "x86_64-unknown-linux-gnu", wheel: "manylinux_2_17_x86_64" }
-          - { rust: "aarch64-unknown-linux-gnu", wheel: "manylinux_2_17_aarch64" }
-          - { rust: "i686-unknown-linux-gnu", wheel: "manylinux_2_17_i686" }
-          - { rust: "x86_64-unknown-linux-musl", wheel: "musllinux_1_2_x86_64" }
-          - { rust: "x86_64-pc-windows-msvc", wheel: "win_amd64" }
-          - { rust: "aarch64-pc-windows-msvc", wheel: "win_arm64" }
-          - { rust: "x86_64-apple-darwin", wheel: "macosx_10_9_x86_64" }
-          - { rust: "aarch64-apple-darwin", wheel: "macosx_11_0_arm64" }
+          - { rust: "x86_64-unknown-linux-gnu", wheel: "manylinux_2_17_x86_64", llvm: true }
+          - { rust: "aarch64-unknown-linux-gnu", wheel: "manylinux_2_17_aarch64", llvm: true }
+          - { rust: "i686-unknown-linux-gnu", wheel: "manylinux_2_17_i686", llvm: false }
+          - { rust: "x86_64-unknown-linux-musl", wheel: "musllinux_1_2_x86_64", llvm: false }
+          - { rust: "x86_64-pc-windows-msvc", wheel: "win_amd64", llvm: false }
+          - { rust: "aarch64-pc-windows-msvc", wheel: "win_arm64", llvm: false }
+          - { rust: "x86_64-apple-darwin", wheel: "macosx_10_9_x86_64", llvm: true }
+          - { rust: "aarch64-apple-darwin", wheel: "macosx_11_0_arm64", llvm: true }
         part:
           - { name: "main", path: "." }
           - { name: "llvm", path: "packages/rustc-bin-llvm" }
@@ -37,7 +37,7 @@ jobs:
       - uses: astral-sh/setup-uv@ed21f2f24f8dd64503750218de024bcf64c7250a
         with:
           enable-cache: false
-      - if: ${{ !(matrix.part.name == 'llvm' && contains(matrix.target.rust, 'windows')) }}
+      - if: ${{ matrix.part.name != 'llvm' || matrix.target.llvm }}
         env:
           RUST_PART: ${{ matrix.part.name }}
           RUST_TARGET: ${{ matrix.target.rust }}
@@ -48,7 +48,7 @@ jobs:
           RUST_TARGET="$RUST_TARGET" \
           WHEEL_TAG="$WHEEL_TAG" \
           uv build --wheel
-      - if: ${{ !(matrix.part.name == 'llvm' && contains(matrix.target.rust, 'windows')) }}
+      - if: ${{ matrix.part.name != 'llvm' || matrix.target.llvm }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: wheels-${{ matrix.part.name }}-${{ matrix.target.rust }}

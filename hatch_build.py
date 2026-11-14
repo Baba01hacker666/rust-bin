@@ -157,8 +157,12 @@ class RustBinaryBuildHook(BuildHookInterface):
                         os.remove(os.path.join(root_dir, filename))
 
         if part == "main":
+            lib_dir = os.path.join(rust_dir, "lib")
+            has_llvm = os.path.isdir(lib_dir) and any(
+                name.startswith("libLLVM") for name in os.listdir(lib_dir)
+            )
             dependencies = [f"rustc-bin-driver=={version}"]
-            if not is_windows:
+            if has_llvm:
                 dependencies.append(f"rustc-bin-llvm=={version}")
             build_data["dependencies"] = dependencies
             build_data["force_include"] = {
