@@ -1,5 +1,5 @@
 [project]
-name = "rust-bin"
+name = "rustc-bin"
 description = "Prebuilt Rust toolchain"
 readme = "README.md"
 requires-python = ">=3.6"
