@@ -10,7 +10,7 @@ import urllib.request
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
-PARTS = ("main", "llvm", "driver")
+PARTS = ("main", "llvm", "driver", "lld")
 HOST_TARGET = "x86_64-unknown-linux-gnu"
 
 
@@ -113,6 +113,18 @@ class RustBinaryBuildHook(BuildHookInterface):
                     with tarfile.open(os.path.join(self.root, archive_name), "r:gz") as tar:
                         if part == "main":
                             tar.extractall(path=temp_dir)
+                        elif part == "lld":
+                            prefix = (
+                                f"rustc-{version}-{rust_target}/rustc/lib/rustlib/"
+                                f"{rust_target}/bin/"
+                            )
+                            members = [
+                                member
+                                for member in tar.getmembers()
+                                if member.name.startswith(prefix)
+                                and not member.name.endswith(".pdb")
+                            ]
+                            tar.extractall(path=temp_dir, members=members)
                         else:
                             if part == "llvm":
                                 prefix = f"rustc-{version}-{rust_target}/rustc/lib/"
@@ -137,6 +149,14 @@ class RustBinaryBuildHook(BuildHookInterface):
 
                     if part == "main":
                         _merge_tree(src_prefix, rust_dir)
+                    elif part == "lld":
+                        src_bin = os.path.join(
+                            src_prefix, "lib", "rustlib", rust_target, "bin"
+                        )
+                        _merge_tree(
+                            src_bin,
+                            os.path.join(rust_dir, "lib", "rustlib", rust_target, "bin"),
+                        )
                     elif is_windows:
                         _merge_tree(os.path.join(src_prefix, "bin"), os.path.join(rust_dir, "bin"))
                     else:
@@ -148,20 +168,29 @@ class RustBinaryBuildHook(BuildHookInterface):
                                     _strip_elf(item_path, strip, strip_env)
                         _merge_tree(src_lib, os.path.join(rust_dir, "lib"))
 
-        if part == "main" and is_windows:
-            for root_dir, _dirs, files in os.walk(rust_dir):
-                for filename in files:
-                    if filename.endswith(".pdb") or (
-                        filename.startswith("rustc_driver-") and filename.endswith(".dll")
-                    ):
-                        os.remove(os.path.join(root_dir, filename))
+        if part == "main":
+            # The bundled linker lives in rustc-bin-lld to keep this wheel small.
+            shutil.rmtree(
+                os.path.join(rust_dir, "lib", "rustlib", rust_target, "bin"),
+                ignore_errors=True,
+            )
+            if is_windows:
+                for root_dir, _dirs, files in os.walk(rust_dir):
+                    for filename in files:
+                        if filename.endswith(".pdb") or (
+                            filename.startswith("rustc_driver-") and filename.endswith(".dll")
+                        ):
+                            os.remove(os.path.join(root_dir, filename))
 
         if part == "main":
             lib_dir = os.path.join(rust_dir, "lib")
             has_llvm = os.path.isdir(lib_dir) and any(
                 name.startswith("libLLVM") for name in os.listdir(lib_dir)
             )
-            dependencies = [f"rustc-bin-driver=={version}"]
+            dependencies = [
+                f"rustc-bin-driver=={version}",
+                f"rustc-bin-lld=={version}",
+            ]
             if has_llvm:
                 dependencies.append(f"rustc-bin-llvm=={version}")
             build_data["dependencies"] = dependencies
@@ -172,6 +201,10 @@ class RustBinaryBuildHook(BuildHookInterface):
                 "rust/etc": "rust/etc",
                 "src/rust/__init__.py": "rust/__init__.py",
                 "src/rust/_version.py": "rust/_version.py",
+            }
+        elif part == "lld":
+            build_data["force_include"] = {
+                "rust/lib/rustlib": "rust/lib/rustlib",
             }
         elif is_windows:
             build_data["force_include"] = {
