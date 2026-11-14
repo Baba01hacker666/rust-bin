@@ -1,0 +1,35 @@
+[project]
+name = "rust-bin"
+description = "Prebuilt Rust toolchain"
+readme = "README.md"
+requires-python = ">=3.6"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "baba01hacker" }]
+keywords = ["binary", "rust", "rustc", "cargo", "packaging", "prebuilt", "toolchain"]
+classifiers = [
+  "Operating System :: OS Independent",
+  "Programming Language :: Rust",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/baba01hacker/rust-bin"
+
+[project.scripts]
+cargo = "rust:main"
+rustc = "rust:main"
+rustdoc = "rust:main"
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "code"
+path = "src/rust/_version.py"
+
+[tool.hatch.build.hooks.custom]
+
+[tool.hatch.build.targets.wheel]
+dev-mode-dirs = ["src"]

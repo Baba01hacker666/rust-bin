@@ -1,0 +1,6 @@
+rust/
+dist/
+*.tar.gz
+*.zip
+__pycache__/
+.venv/
