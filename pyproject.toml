@@ -14,7 +14,7 @@ classifiers = [
 dynamic = ["version"]
 
 [project.urls]
-Repository = "https://github.com/baba01hacker/rust-bin"
+Repository = "https://github.com/Baba01hacker666/rust-bin"
 
 [project.scripts]
 cargo = "rust:main"
