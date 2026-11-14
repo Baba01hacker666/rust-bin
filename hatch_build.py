@@ -38,6 +38,14 @@ def _strip_elf(path: str, strip: str, env: dict[str, str]) -> None:
     subprocess.run([strip, "--strip-unneeded", path], check=True, env=env)
 
 
+def _strip_tree(root: str, strip: str, env: dict[str, str]) -> None:
+    for root_dir, _dirs, files in os.walk(root):
+        for filename in files:
+            path = os.path.join(root_dir, filename)
+            if os.path.isfile(path) and not os.path.islink(path):
+                _strip_elf(path, strip, env)
+
+
 def _llvm_strip(version: str, temp_dir: str, root: str) -> tuple[str, dict[str, str]]:
     archive_name = f"llvm-tools-{version}-{HOST_TARGET}.tar.gz"
     archive_path = os.path.join(root, archive_name)
@@ -90,12 +98,17 @@ class RustBinaryBuildHook(BuildHookInterface):
 
         is_windows = "windows" in rust_target
         rust_dir = os.path.join(self.root, "rust")
+        strip = None
+        strip_env: dict[str, str] = {}
+        has_llvm = False
 
-        if not os.path.exists(rust_dir):
-            with tempfile.TemporaryDirectory() as temp_dir:
-                strip = None
-                strip_env: dict[str, str] = {}
-                if part in ("llvm", "driver") and "linux" in rust_target:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            if not os.path.exists(rust_dir):
+                # The upstream binaries are not stripped, so every ELF file we
+                # ship (main, llvm, driver and lld alike) is stripped here.
+                # llvm-strip is used because a single host build can strip any
+                # target architecture.
+                if "linux" in rust_target:
                     strip, strip_env = _llvm_strip(rust_version, temp_dir, self.root)
 
                 if part == "main":
@@ -157,10 +170,12 @@ class RustBinaryBuildHook(BuildHookInterface):
                         src_bin = os.path.join(
                             src_prefix, "lib", "rustlib", rust_target, "bin"
                         )
-                        _merge_tree(
-                            src_bin,
-                            os.path.join(rust_dir, "lib", "rustlib", rust_target, "bin"),
+                        dst_bin = os.path.join(
+                            rust_dir, "lib", "rustlib", rust_target, "bin"
                         )
+                        _merge_tree(src_bin, dst_bin)
+                        if strip is not None:
+                            _strip_tree(dst_bin, strip, strip_env)
                     elif is_windows:
                         _merge_tree(os.path.join(src_prefix, "bin"), os.path.join(rust_dir, "bin"))
                     else:
@@ -172,25 +187,33 @@ class RustBinaryBuildHook(BuildHookInterface):
                                     _strip_elf(item_path, strip, strip_env)
                         _merge_tree(src_lib, os.path.join(rust_dir, "lib"))
 
-        if part == "main":
-            # The bundled linker lives in rustc-bin-lld to keep this wheel small.
-            shutil.rmtree(
-                os.path.join(rust_dir, "lib", "rustlib", rust_target, "bin"),
-                ignore_errors=True,
-            )
-            if is_windows:
-                for root_dir, _dirs, files in os.walk(rust_dir):
-                    for filename in files:
-                        if filename.endswith(".pdb") or (
-                            filename.startswith("rustc_driver-") and filename.endswith(".dll")
-                        ):
-                            os.remove(os.path.join(root_dir, filename))
+            if part == "main":
+                # The bundled linker lives in rustc-bin-lld to keep this wheel small.
+                shutil.rmtree(
+                    os.path.join(rust_dir, "lib", "rustlib", rust_target, "bin"),
+                    ignore_errors=True,
+                )
+                if is_windows:
+                    for root_dir, _dirs, files in os.walk(rust_dir):
+                        for filename in files:
+                            if filename.endswith(".pdb") or (
+                                filename.startswith("rustc_driver-")
+                                and filename.endswith(".dll")
+                            ):
+                                os.remove(os.path.join(root_dir, filename))
+
+                lib_dir = os.path.join(rust_dir, "lib")
+                has_llvm = os.path.isdir(lib_dir) and any(
+                    name.startswith("libLLVM") for name in os.listdir(lib_dir)
+                )
+                # rust/lib is not shipped in this wheel (LLVM and the compiler
+                # driver are published separately as rustc-bin-llvm and
+                # rustc-bin-driver), so only the included trees are stripped.
+                if strip is not None:
+                    for included in ("bin", os.path.join("lib", "rustlib"), "libexec"):
+                        _strip_tree(os.path.join(rust_dir, included), strip, strip_env)
 
         if part == "main":
-            lib_dir = os.path.join(rust_dir, "lib")
-            has_llvm = os.path.isdir(lib_dir) and any(
-                name.startswith("libLLVM") for name in os.listdir(lib_dir)
-            )
             dependencies = [
                 f"rustc-bin-driver=={version}",
                 f"rustc-bin-lld=={version}",
