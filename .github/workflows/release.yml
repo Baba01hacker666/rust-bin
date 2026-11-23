@@ -28,8 +28,7 @@ jobs:
         part:
           - { name: "main", path: "." }
           - { name: "llvm", path: "packages/rustc-bin-llvm" }
-          - { name: "driver", path: "packages/rustc-bin-driver" }
-          - { name: "lld", path: "packages/rustc-bin-lld" }
+          - { name: "compiler", path: "packages/compiler-driver-runtime" }
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
         with:
@@ -59,8 +58,10 @@ jobs:
   # and ignores the project name, so every project published from this repo
   # needs its own job with its own GitHub environment. rustc-bin already has a
   # publisher without an environment, so that job deliberately has none.
+  # Publish the companions first: rustc-bin declares them as dependencies, so
+  # it must not land before they exist on PyPI.
   publish-main:
-    needs: build
+    needs: [build, publish-llvm, publish-compiler]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -90,7 +91,7 @@ jobs:
           path: dist
           merge-multiple: true
       - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl
-  publish-driver:
+  publish-compiler:
     needs: build
     runs-on: ubuntu-latest
     environment: pypi-driver
@@ -102,23 +103,7 @@ jobs:
           enable-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          pattern: wheels-driver-*
-          path: dist
-          merge-multiple: true
-      - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl
-  publish-lld:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: pypi-lld
-    permissions:
-      id-token: write
-    steps:
-      - uses: astral-sh/setup-uv@ed21f2f24f8dd64503750218de024bcf64c7250a
-        with:
-          enable-cache: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          pattern: wheels-lld-*
+          pattern: wheels-compiler-*
           path: dist
           merge-multiple: true
       - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl

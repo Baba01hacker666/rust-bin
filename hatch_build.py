@@ -10,7 +10,7 @@ import urllib.request
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
-PARTS = ("main", "llvm", "driver", "lld")
+PARTS = ("main", "llvm", "driver")
 HOST_TARGET = "x86_64-unknown-linux-gnu"
 
 
@@ -103,96 +103,70 @@ class RustBinaryBuildHook(BuildHookInterface):
         has_llvm = False
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            if not os.path.exists(rust_dir):
-                # The upstream binaries are not stripped, so every ELF file we
-                # ship (main, llvm, driver and lld alike) is stripped here.
-                # llvm-strip is used because a single host build can strip any
-                # target architecture.
-                if "linux" in rust_target:
-                    strip, strip_env = _llvm_strip(rust_version, temp_dir, self.root)
+            # The upstream binaries are not stripped, so every ELF file we ship
+            # is stripped here. llvm-strip handles any target architecture.
+            if "linux" in rust_target:
+                strip, strip_env = _llvm_strip(rust_version, temp_dir, self.root)
 
-                if part == "main":
-                    components = (
-                        ("rustc", "rustc"),
-                        ("cargo", "cargo"),
-                        ("rust-std", f"rust-std-{rust_target}"),
-                    )
-                else:
-                    components = (("rustc", "rustc"),)
-
-                for component, inner in components:
-                    archive_name = f"{component}-{rust_version}-{rust_target}.tar.gz"
-                    _download(
-                        "https://static.rust-lang.org/dist/" + archive_name,
-                        os.path.join(self.root, archive_name),
-                    )
-
-                    with tarfile.open(os.path.join(self.root, archive_name), "r:gz") as tar:
-                        if part == "main":
-                            tar.extractall(path=temp_dir)
-                        elif part == "lld":
-                            prefix = (
-                                f"rustc-{rust_version}-{rust_target}/rustc/lib/rustlib/"
-                                f"{rust_target}/bin/"
-                            )
-                            members = [
-                                member
-                                for member in tar.getmembers()
-                                if member.name.startswith(prefix)
-                                and not member.name.endswith(".pdb")
-                            ]
-                            tar.extractall(path=temp_dir, members=members)
-                        else:
-                            if part == "llvm":
-                                prefix = f"rustc-{rust_version}-{rust_target}/rustc/lib/"
-                                wanted = "libLLVM"
-                            elif is_windows:
-                                prefix = f"rustc-{rust_version}-{rust_target}/rustc/bin/"
-                                wanted = "rustc_driver"
-                            else:
-                                prefix = f"rustc-{rust_version}-{rust_target}/rustc/lib/"
-                                wanted = "librustc_driver"
-                            members = [
-                                member
-                                for member in tar.getmembers()
-                                if member.name.startswith(prefix)
-                                and os.path.basename(member.name).startswith(wanted)
-                                and not member.name.endswith(".pdb")
-                            ]
-                            tar.extractall(path=temp_dir, members=members)
-
-                    comp_top = os.path.join(temp_dir, f"{component}-{rust_version}-{rust_target}")
-                    src_prefix = os.path.join(comp_top, inner)
-
-                    if part == "main":
-                        _merge_tree(src_prefix, rust_dir)
-                    elif part == "lld":
-                        src_bin = os.path.join(
-                            src_prefix, "lib", "rustlib", rust_target, "bin"
-                        )
-                        dst_bin = os.path.join(
-                            rust_dir, "lib", "rustlib", rust_target, "bin"
-                        )
-                        _merge_tree(src_bin, dst_bin)
-                        if strip is not None:
-                            _strip_tree(dst_bin, strip, strip_env)
-                    elif is_windows:
-                        _merge_tree(os.path.join(src_prefix, "bin"), os.path.join(rust_dir, "bin"))
-                    else:
-                        src_lib = os.path.join(src_prefix, "lib")
-                        if strip is not None:
-                            for item in os.listdir(src_lib):
-                                item_path = os.path.join(src_lib, item)
-                                if os.path.isfile(item_path):
-                                    _strip_elf(item_path, strip, strip_env)
-                        _merge_tree(src_lib, os.path.join(rust_dir, "lib"))
+            # Never reuse a previous build's tree (different targets or parts).
+            shutil.rmtree(rust_dir, ignore_errors=True)
 
             if part == "main":
-                # The bundled linker lives in rustc-bin-lld to keep this wheel small.
-                shutil.rmtree(
-                    os.path.join(rust_dir, "lib", "rustlib", rust_target, "bin"),
-                    ignore_errors=True,
+                components = (
+                    ("rustc", "rustc"),
+                    ("cargo", "cargo"),
+                    ("rust-std", f"rust-std-{rust_target}"),
                 )
+            else:
+                components = (("rustc", "rustc"),)
+
+            for component, inner in components:
+                archive_name = f"{component}-{rust_version}-{rust_target}.tar.gz"
+                archive_path = os.path.join(self.root, archive_name)
+                _download(
+                    "https://static.rust-lang.org/dist/" + archive_name,
+                    archive_path,
+                )
+
+                with tarfile.open(archive_path, "r:gz") as tar:
+                    if part == "main":
+                        tar.extractall(path=temp_dir)
+                    else:
+                        if part == "llvm":
+                            prefix = f"rustc-{rust_version}-{rust_target}/rustc/lib/"
+                            wanted = "libLLVM"
+                        elif is_windows:
+                            prefix = f"rustc-{rust_version}-{rust_target}/rustc/bin/"
+                            wanted = "rustc_driver"
+                        else:
+                            prefix = f"rustc-{rust_version}-{rust_target}/rustc/lib/"
+                            wanted = "librustc_driver"
+                        members = [
+                            member
+                            for member in tar.getmembers()
+                            if member.name.startswith(prefix)
+                            and os.path.basename(member.name).startswith(wanted)
+                            and not member.name.endswith(".pdb")
+                        ]
+                        tar.extractall(path=temp_dir, members=members)
+
+                comp_top = os.path.join(temp_dir, f"{component}-{rust_version}-{rust_target}")
+                src_prefix = os.path.join(comp_top, inner)
+
+                if part == "main":
+                    _merge_tree(src_prefix, rust_dir)
+                elif is_windows:
+                    _merge_tree(os.path.join(src_prefix, "bin"), os.path.join(rust_dir, "bin"))
+                else:
+                    src_lib = os.path.join(src_prefix, "lib")
+                    if strip is not None:
+                        for item in os.listdir(src_lib):
+                            item_path = os.path.join(src_lib, item)
+                            if os.path.isfile(item_path):
+                                _strip_elf(item_path, strip, strip_env)
+                    _merge_tree(src_lib, os.path.join(rust_dir, "lib"))
+
+            if part == "main":
                 if is_windows:
                     for root_dir, _dirs, files in os.walk(rust_dir):
                         for filename in files:
@@ -206,18 +180,14 @@ class RustBinaryBuildHook(BuildHookInterface):
                 has_llvm = os.path.isdir(lib_dir) and any(
                     name.startswith("libLLVM") for name in os.listdir(lib_dir)
                 )
-                # rust/lib is not shipped in this wheel (LLVM and the compiler
-                # driver are published separately as rustc-bin-llvm and
-                # rustc-bin-driver), so only the included trees are stripped.
+                # LLVM and the compiler driver live in their own wheels;
+                # only the trees included here are stripped.
                 if strip is not None:
                     for included in ("bin", os.path.join("lib", "rustlib"), "libexec"):
                         _strip_tree(os.path.join(rust_dir, included), strip, strip_env)
 
         if part == "main":
-            dependencies = [
-                f"rustc-bin-driver=={version}",
-                f"rustc-bin-lld=={version}",
-            ]
+            dependencies = [f"compiler-driver-runtime=={version}"]
             if has_llvm:
                 dependencies.append(f"rustc-bin-llvm=={version}")
             build_data["dependencies"] = dependencies
@@ -228,10 +198,6 @@ class RustBinaryBuildHook(BuildHookInterface):
                 "rust/etc": "rust/etc",
                 "src/rust/__init__.py": "rust/__init__.py",
                 "src/rust/_version.py": "rust/_version.py",
-            }
-        elif part == "lld":
-            build_data["force_include"] = {
-                "rust/lib/rustlib": "rust/lib/rustlib",
             }
         elif is_windows:
             build_data["force_include"] = {

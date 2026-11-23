@@ -1,10 +1,10 @@
 [project]
-name = "rustc-bin-lld"
-description = "Bundled LLD linker for rustc-bin"
+name = "compiler-driver-runtime"
+description = "Rust compiler driver library for rustc-bin"
 requires-python = ">=3.6"
 license = "MIT"
 authors = [{ name = "baba01hacker" }]
-keywords = ["binary", "rust", "rustc", "lld", "linker", "packaging", "prebuilt"]
+keywords = ["binary", "rust", "rustc", "driver", "packaging", "prebuilt"]
 classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Rust",
