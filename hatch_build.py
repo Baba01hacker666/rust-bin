@@ -189,7 +189,7 @@ class RustBinaryBuildHook(BuildHookInterface):
                         _strip_tree(os.path.join(rust_dir, included), strip, strip_env)
 
         if part == "main":
-            dependencies = [f"compiler-driver-runtime=={version}"]
+            dependencies = [f"rustc-bin-driver=={version}"]
             if has_llvm:
                 dependencies.append(f"rustc-bin-llvm=={version}")
             build_data["dependencies"] = dependencies

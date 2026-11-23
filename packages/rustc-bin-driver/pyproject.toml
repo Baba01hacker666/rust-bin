@@ -1,5 +1,5 @@
 [project]
-name = "compiler-driver-runtime"
+name = "rustc-bin-driver"
 description = "Rust compiler driver library for rustc-bin"
 requires-python = ">=3.6"
 license = "MIT"

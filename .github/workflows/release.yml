@@ -43,7 +43,7 @@ jobs:
         part:
           - { name: "main", path: "." }
           - { name: "llvm", path: "packages/rustc-bin-llvm" }
-          - { name: "driver", path: "packages/compiler-driver-runtime" }
+          - { name: "driver", path: "packages/rustc-bin-driver" }
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
         with:

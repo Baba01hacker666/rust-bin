@@ -11,7 +11,7 @@ below the limit while `pip install rustc-bin` still installs the whole toolchain
 
 - `rustc-bin` — compiler binaries, standard library, bundled LLD linker and launcher (~74 MB)
 - `rustc-bin-llvm` — LLVM runtime library (only where LLVM is not statically linked, ~63 MB)
-- `compiler-driver-runtime` — Rust compiler driver library (~61 MB)
+- `rustc-bin-driver` — Rust compiler driver library (~61 MB)
 
 All wheels install into the same `rust/` package directory and are merged at
 install time.
@@ -35,7 +35,7 @@ cd packages/rustc-bin-llvm
 RUST_PART=llvm RUST_TARGET=x86_64-unknown-linux-gnu \
   WHEEL_TAG=manylinux_2_17_x86_64 GITHUB_REF_NAME=v1.100.0 uv build --wheel
 
-cd ../compiler-driver-runtime
+cd ../rustc-bin-driver
 RUST_PART=driver RUST_TARGET=x86_64-unknown-linux-gnu \
   WHEEL_TAG=manylinux_2_17_x86_64 GITHUB_REF_NAME=v1.100.0 uv build --wheel
 ```
@@ -53,14 +53,15 @@ publishing. PyPI identifies a trusted publisher by repository, workflow and
 environment and ignores the project name, so each of the three projects is
 published by its own job with its own environment:
 
-| Project                  | Environment   |
-| ------------------------ | ------------- |
-| `rustc-bin`              | (none)        |
-| `rustc-bin-llvm`         | `pypi-llvm`   |
-| `compiler-driver-runtime`| `pypi-driver` |
+| Project            | Environment   |
+| ------------------ | ------------- |
+| `rustc-bin`        | (none)        |
+| `rustc-bin-llvm`   | `pypi-llvm`   |
+| `rustc-bin-driver` | `pypi-driver` |
 
-The GitHub environment name stays `pypi-driver` so existing repository settings
-keep working; only the PyPI project name changed.
+If PyPI rejects the `rustc-bin-driver` publisher again, rename the project in
+`packages/rustc-bin-driver/pyproject.toml` (and the matching dependency in
+`hatch_build.py`) to `compiler-driver-runtime` and re-run the release.
 
 `rustc-bin` is published only after both companions, so its dependencies always
 exist on PyPI by the time it lands. Re-running a release is safe: uploads use
