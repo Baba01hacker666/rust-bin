@@ -9,7 +9,7 @@ A single PyPI wheel would exceed PyPI's default 100 MB per-file upload limit
 takes weeks. Splitting the payload into three wheels keeps every upload well
 below the limit while `pip install rustc-bin` still installs the whole toolchain:
 
-- `rustc-bin` — compiler binaries, standard library, bundled LLD linker and launcher (~74 MB)
+- `rustc-bin` — compiler binaries, standard library and launcher (~64 MB; uses the system linker)
 - `rustc-bin-llvm` — LLVM runtime library (only where LLVM is not statically linked, ~63 MB)
 - `rustc-bin-driver` — Rust compiler driver library (~61 MB)
 
@@ -44,7 +44,8 @@ The `llvm` part is skipped for targets where LLVM is statically linked (i686,
 musl and Windows); `rustc-bin` omits that dependency automatically on those
 targets. The build hook downloads the llvm-tools component at build time to
 strip every shipped ELF file; the stripper itself is not shipped. Windows PDB
-debug symbols are dropped.
+debug symbols and the bundled LLD tools are dropped to stay under PyPI's
+per-file limit — rustc uses the system linker by default.
 
 ## Publishing
 

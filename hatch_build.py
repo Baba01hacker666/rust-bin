@@ -169,6 +169,13 @@ class RustBinaryBuildHook(BuildHookInterface):
                     _merge_tree(src_lib, os.path.join(rust_dir, "lib"))
 
             if part == "main":
+                # The bundled LLD tools are huge on some targets (43 MB on
+                # i686) and would push this wheel past PyPI's 100 MB limit.
+                # rustc uses the system linker by default, so drop them.
+                shutil.rmtree(
+                    os.path.join(rust_dir, "lib", "rustlib", rust_target, "bin"),
+                    ignore_errors=True,
+                )
                 if is_windows:
                     for root_dir, _dirs, files in os.walk(rust_dir):
                         for filename in files:
