@@ -5,6 +5,21 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Packaging version when dispatching manually (e.g. 1.100.0.post2)"
+        required: false
+        default: ""
+      publish:
+        description: "Which project to publish"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - llvm
+          - compiler
+          - main
 
 permissions: {}
 
@@ -28,7 +43,7 @@ jobs:
         part:
           - { name: "main", path: "." }
           - { name: "llvm", path: "packages/rustc-bin-llvm" }
-          - { name: "compiler", path: "packages/compiler-driver-runtime" }
+          - { name: "driver", path: "packages/compiler-driver-runtime" }
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
         with:
@@ -42,11 +57,13 @@ jobs:
           RUST_PART: ${{ matrix.part.name }}
           RUST_TARGET: ${{ matrix.target.rust }}
           WHEEL_TAG: ${{ matrix.target.wheel }}
+          RUST_REF_NAME: ${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
         run: |
           cd "${{ matrix.part.path }}"
           RUST_PART="$RUST_PART" \
           RUST_TARGET="$RUST_TARGET" \
           WHEEL_TAG="$WHEEL_TAG" \
+          RUST_REF_NAME="$RUST_REF_NAME" \
           uv build --wheel
       - if: ${{ matrix.part.name != 'llvm' || matrix.target.llvm }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -61,6 +78,7 @@ jobs:
   # Publish the companions first: rustc-bin declares them as dependencies, so
   # it must not land before they exist on PyPI.
   publish-main:
+    if: ${{ inputs.publish == '' || inputs.publish == 'all' || inputs.publish == 'main' }}
     needs: [build, publish-llvm, publish-compiler]
     runs-on: ubuntu-latest
     permissions:
@@ -76,6 +94,7 @@ jobs:
           merge-multiple: true
       - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl
   publish-llvm:
+    if: ${{ inputs.publish == '' || inputs.publish == 'all' || inputs.publish == 'llvm' }}
     needs: build
     runs-on: ubuntu-latest
     environment: pypi-llvm
@@ -92,6 +111,7 @@ jobs:
           merge-multiple: true
       - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl
   publish-compiler:
+    if: ${{ inputs.publish == '' || inputs.publish == 'all' || inputs.publish == 'compiler' }}
     needs: build
     runs-on: ubuntu-latest
     environment: pypi-driver
@@ -103,7 +123,7 @@ jobs:
           enable-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          pattern: wheels-compiler-*
+          pattern: wheels-driver-*
           path: dist
           merge-multiple: true
       - run: uv publish --check-url https://pypi.org/simple/ dist/*.whl

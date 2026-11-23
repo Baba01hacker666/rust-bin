@@ -87,7 +87,9 @@ class RustBinaryBuildHook(BuildHookInterface):
 
         build_data["tag"] = "py3-none-" + wheel_tag
 
-        tag = os.environ["GITHUB_REF_NAME"]
+        # Manual workflow dispatches run on a branch, so they pass the version
+        # explicitly instead of relying on the tag ref.
+        tag = os.getenv("RUST_REF_NAME") or os.environ["GITHUB_REF_NAME"]
         match = re.search(r"v?(\d+\.\d+\.\d+)(?:\.post\d+)?", tag)
         assert match is not None, "GITHUB_REF_NAME must contain a version"
         rust_version = match.group(1)
